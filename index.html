@@ -1911,25 +1911,25 @@ const Store = {
     try {
       if (window.storage) {
         const r = await window.storage.get(key);
-        return r ? r.value : null;
+        if (r) return r.value;
       }
     } catch(e) {}
+    // Always fall back to localStorage
     return localStorage.getItem(key);
   },
   async set(key, value) {
-    try {
-      if (window.storage) {
-        await window.storage.set(key, value);
-        return;
-      }
-    } catch(e) {}
+    // Always save to localStorage immediately (fast, works offline)
     localStorage.setItem(key, value);
+    // Also try cloud
+    try {
+      if (window.storage) await window.storage.set(key, value);
+    } catch(e) {}
   },
   async remove(key) {
-    try {
-      if (window.storage) { await window.storage.delete(key); return; }
-    } catch(e) {}
     localStorage.removeItem(key);
+    try {
+      if (window.storage) await window.storage.delete(key);
+    } catch(e) {}
   }
 };
 
@@ -1944,7 +1944,7 @@ let pinMode = 'unlock'; // 'unlock' | 'setup' | 'confirm'
 let pinSetupFirst = '';
 
 async function initPin() {
-  const storedPin = await Store.get(PIN_KEY);
+  const storedPin = localStorage.getItem(PIN_KEY);
   if (!storedPin) {
     // First time — setup mode
     pinMode = 'setup';
@@ -1986,7 +1986,7 @@ function updatePinDots(state) {
 
 async function handlePin() {
   if (pinMode === 'unlock') {
-    const stored = await Store.get(PIN_KEY);
+    const stored = localStorage.getItem(PIN_KEY);
     if (pinBuffer === stored) {
       sessionStorage.setItem(SESSION_KEY, Date.now().toString());
       unlockApp();
@@ -2004,7 +2004,7 @@ async function handlePin() {
     document.getElementById('pinSetupLabel').style.display = 'none';
   } else if (pinMode === 'confirm') {
     if (pinBuffer === pinSetupFirst) {
-      await Store.set(PIN_KEY, pinBuffer);
+      localStorage.setItem(PIN_KEY, pinBuffer);
       sessionStorage.setItem(SESSION_KEY, Date.now().toString());
       unlockApp();
     } else {
