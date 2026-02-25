@@ -1937,35 +1937,158 @@
 
 <script>
 
+
 // ============================================================
-//  STORAGE ADAPTER (window.storage cloud -> localStorage fallback)
+//  SUPABASE CLIENT
 // ============================================================
-const Store = {
-  async get(key) {
-    try {
-      if (window.storage) {
-        const r = await window.storage.get(key);
-        if (r) return r.value;
-      }
-    } catch(e) {}
-    // Always fall back to localStorage
-    return localStorage.getItem(key);
-  },
-  async set(key, value) {
-    // Always save to localStorage immediately (fast, works offline)
-    localStorage.setItem(key, value);
-    // Also try cloud
-    try {
-      if (window.storage) await window.storage.set(key, value);
-    } catch(e) {}
-  },
-  async remove(key) {
-    localStorage.removeItem(key);
-    try {
-      if (window.storage) await window.storage.delete(key);
-    } catch(e) {}
+const SUPABASE_URL = 'https://pjbfsloeqmvsatgmmabz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqYmZzbG9lcW12c2F0Z21tYWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjU0OTQsImV4cCI6MjA4NzYwMTQ5NH0.1y-gQM7CIn1UUZjTEEDaKMh7ciVjkaBaxxGOo_h6UuE';
+
+async function sbFetch(path, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method === 'POST' ? 'return=representation' : ''
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
+  if (!r.ok) { const e = await r.text(); throw new Error(e); }
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+// ---- USER ----
+async function sbGetUser(pinHash) {
+  const rows = await sbFetch('users?pin_hash=eq.' + encodeURIComponent(pinHash) + '&limit=1');
+  return rows && rows.length ? rows[0] : null;
+}
+
+async function sbCreateUser(name, pinHash) {
+  const rows = await sbFetch('users', 'POST', { name, pin_hash: pinHash });
+  return rows && rows.length ? rows[0] : null;
+}
+
+// ---- SESSIONS ----
+async function sbLoadSessions(userId) {
+  // Returns all sessions with their shots for this user
+  const sessions = await sbFetch('sessions?user_id=eq.' + userId + '&order=start_time.asc&select=*,shots(*)');
+  return sessions || [];
+}
+
+async function sbSaveSession(userId, sess, dateKey) {
+  // Upsert session
+  let sessionRow;
+  if (sess._sbId) {
+    // Update existing
+    await sbFetch('sessions?id=eq.' + sess._sbId, 'PATCH', {
+      end_time: sess.endTime || null
+    });
+    sessionRow = { id: sess._sbId };
+  } else {
+    // Insert new
+    const rows = await sbFetch('sessions', 'POST', {
+      user_id: userId,
+      date: dateKey,
+      start_time: sess.startTime,
+      end_time: sess.endTime || null
+    });
+    sessionRow = rows[0];
+    sess._sbId = sessionRow.id;
   }
-};
+  return sessionRow.id;
+}
+
+async function sbSaveShot(sessionId, shot) {
+  if (shot._sbId) return; // already saved
+  const rows = await sbFetch('shots', 'POST', {
+    session_id: sessionId,
+    type: shot.type,
+    shots: shot.shots,
+    time: shot.time
+  });
+  if (rows && rows[0]) shot._sbId = rows[0].id;
+}
+
+async function sbDeleteSession(sessionId) {
+  await sbFetch('sessions?id=eq.' + sessionId, 'DELETE');
+}
+
+async function sbDeleteShot(shotId) {
+  await sbFetch('shots?id=eq.' + shotId, 'DELETE');
+}
+
+// Convert Supabase rows back to local data format
+function sbRowsToData(sessions) {
+  const data = {};
+  sessions.forEach(sess => {
+    const dateKey = sess.date;
+    if (!data[dateKey]) data[dateKey] = [];
+    data[dateKey].push({
+      _sbId: sess.id,
+      startTime: sess.start_time,
+      endTime: sess.end_time,
+      shots: (sess.shots || []).map(s => ({
+        _sbId: s.id,
+        type: s.type,
+        shots: s.shots,
+        time: s.time
+      }))
+    });
+  });
+  return data;
+}
+
+
+// ---- LOCAL CACHE ----
+// We keep a local copy of data in memory + localStorage for speed
+// Supabase is source of truth, synced on load and on each write
+
+let currentUserId = null;
+
+async function sbSyncAll() {
+  if (!currentUserId) return;
+  try {
+    const sessions = await sbLoadSessions(currentUserId);
+    data = sbRowsToData(sessions);
+    // Also cache locally
+    localStorage.setItem(DATA_KEY, JSON.stringify(data));
+  } catch(e) {
+    console.warn('Sync failed, using local cache', e);
+    const cached = localStorage.getItem(DATA_KEY);
+    if (cached) data = JSON.parse(cached);
+  }
+}
+
+// Override save() to write to Supabase
+async function saveToCloud(d) {
+  if (!currentUserId) {
+    localStorage.setItem(DATA_KEY, JSON.stringify(d));
+    return;
+  }
+  // Save locally immediately
+  localStorage.setItem(DATA_KEY, JSON.stringify(d));
+  // Then sync to Supabase
+  try {
+    const keys = Object.keys(d);
+    for (const dateKey of keys) {
+      const sessions = d[dateKey].filter(s => Array.isArray(s.shots));
+      for (const sess of sessions) {
+        const sessionId = await sbSaveSession(currentUserId, sess, dateKey);
+        for (const shot of sess.shots) {
+          await sbSaveShot(sessionId, shot);
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('Cloud save failed:', e);
+  }
+}
+
+
 
 
 // ============================================================
@@ -1977,20 +2100,32 @@ let pinBuffer = '';
 let pinMode = 'unlock'; // 'unlock' | 'setup' | 'confirm'
 let pinSetupFirst = '';
 
+function simpleHash(str) {
+  // Simple hash for PIN - not cryptographic but fine for this use case
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
 async function initPin() {
-  const storedPin = localStorage.getItem(PIN_KEY);
-  if (!storedPin) {
-    // First time — setup mode
+  // Check session (stay unlocked for 8 hours)
+  const session = sessionStorage.getItem(SESSION_KEY);
+  const cachedUserId = sessionStorage.getItem('hakon_user_id');
+  if (session && cachedUserId && (Date.now() - parseInt(session)) < 8 * 60 * 60 * 1000) {
+    currentUserId = cachedUserId;
+    unlockApp();
+    return;
+  }
+  // Check if any user exists locally
+  const localPin = localStorage.getItem(PIN_KEY);
+  if (!localPin) {
     pinMode = 'setup';
-    document.getElementById('pinSubText').textContent = 'Første gang! Sett en PIN-kode for å beskytte dataene dine.';
+    document.getElementById('pinSubText').textContent = 'Første gang! Velg et navn og PIN-kode.';
     document.getElementById('pinSetupLabel').style.display = 'block';
   } else {
-    // Check session (stay unlocked for 8 hours)
-    const session = sessionStorage.getItem(SESSION_KEY);
-    if (session && (Date.now() - parseInt(session)) < 8 * 60 * 60 * 1000) {
-      unlockApp();
-      return;
-    }
     pinMode = 'unlock';
   }
   document.getElementById('pinScreen').classList.remove('hidden');
@@ -2020,14 +2155,31 @@ function updatePinDots(state) {
 
 async function handlePin() {
   if (pinMode === 'unlock') {
-    const stored = localStorage.getItem(PIN_KEY);
-    if (pinBuffer === stored) {
-      sessionStorage.setItem(SESSION_KEY, Date.now().toString());
-      unlockApp();
-    } else {
-      updatePinDots('error');
-      document.getElementById('pinError').textContent = 'Feil PIN, prøv igjen';
-      setTimeout(() => { pinBuffer = ''; updatePinDots(); }, 800);
+    const pinHash = simpleHash(pinBuffer);
+    try {
+      const user = await sbGetUser(pinHash);
+      if (user) {
+        currentUserId = user.id;
+        localStorage.setItem(PIN_KEY, pinBuffer);
+        sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+        sessionStorage.setItem('hakon_user_id', user.id);
+        unlockApp();
+      } else {
+        updatePinDots('error');
+        document.getElementById('pinError').textContent = 'Feil PIN, prøv igjen';
+        setTimeout(() => { pinBuffer = ''; updatePinDots(); document.getElementById('pinError').textContent = ''; }, 800);
+      }
+    } catch(e) {
+      // Offline fallback
+      const stored = localStorage.getItem(PIN_KEY);
+      if (pinBuffer === stored) {
+        sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+        unlockApp();
+      } else {
+        updatePinDots('error');
+        document.getElementById('pinError').textContent = 'Feil PIN, prøv igjen';
+        setTimeout(() => { pinBuffer = ''; updatePinDots(); }, 800);
+      }
     }
   } else if (pinMode === 'setup') {
     pinSetupFirst = pinBuffer;
@@ -2038,6 +2190,16 @@ async function handlePin() {
     document.getElementById('pinSetupLabel').style.display = 'none';
   } else if (pinMode === 'confirm') {
     if (pinBuffer === pinSetupFirst) {
+      // Ask for name
+      const name = prompt('Hva heter du?') || 'Håkon';
+      const pinHash = simpleHash(pinBuffer);
+      try {
+        const user = await sbCreateUser(name, pinHash);
+        if (user) {
+          currentUserId = user.id;
+          sessionStorage.setItem('hakon_user_id', user.id);
+        }
+      } catch(e) { console.warn('Could not create user in cloud:', e); }
       localStorage.setItem(PIN_KEY, pinBuffer);
       sessionStorage.setItem(SESSION_KEY, Date.now().toString());
       unlockApp();
@@ -2868,10 +3030,15 @@ function toggleLaer(type) {
 //  INIT
 // ============================================================
 async function initApp() {
+  // Show loading state
   try {
-    const stored = await Store.get(DATA_KEY);
-    if (stored) data = JSON.parse(stored);
-  } catch(e) {}
+    // Try cloud first
+    await sbSyncAll();
+  } catch(e) {
+    // Fall back to local
+    const cached = localStorage.getItem(DATA_KEY);
+    if (cached) { try { data = JSON.parse(cached); } catch(e2) {} }
+  }
   applyColors();
   updateHeader();
   renderLog();
