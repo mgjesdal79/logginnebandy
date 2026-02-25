@@ -2,7 +2,15 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+  <!-- PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Logg innebandy">
+  <meta name="theme-color" content="#050508">
+  <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgZmlsbD0iIzA1MDUwOCIgcng9IjQwIi8+PHRleHQgeD0iOTAiIHk9Ijc4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI3NiIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iI0Y1QzgwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSI+SUJLPC90ZXh0Pjx0ZXh0IHg9IjkwIiB5PSIxMzgiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjayxzYW5zLXNlcmlmIiBmb250LXNpemU9IjI2IiBmb250LXdlaWdodD0iOTAwIiBmaWxsPSIjRjVDODAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MT0dHPC90ZXh0Pjwvc3ZnPg==">
+  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTG9nZyBpbm5lYmFuZHkiLCJzaG9ydF9uYW1lIjoiSW5uZWJhbmR5IiwiaWNvbnMiOlt7InNyYyI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92ZDNkM0xuY3pMbTl5Wnk4eU1EQXdMM04yWnlJZ2RtbGxkMEp2ZUQwaU1UZ3dJREU0TUNJZ1puSnZiVDBpTUM0d01pNHdNaUkrUEhKbFkzUWdkMmxrZEdnOU1UZ3dJaUJvWldsbmFIUTlNVGd3SWlCbWFXeHNQU0lqTURVd01EQTRJaUJ5ZUQwaU5EQWlMejQrUEhSbGVIUWdlRDBpT1RBaUlIazlJamM0SWlCbWIyNTBMV1poYldsc2VUMGlRWEpoYVd3Z1FteGhZeXhzYVc1clBTSnpZVzV6TFhObGNtbG1MeTRpSUdadmJuUXRjMlZ5YVdZOUlqZ3dNQ0lnWm05dWRDMW1ZVzFwYkhrOUlpa2dkbWxsZDBsdlppMXBibTVsY21sMElETTRJaUJtYVd4c1BTSWpSalZET0RBd0lpQjBaWGgwTFdGdVkyaHZjajBpWW14dllpSStTVUpMPC90ZXh0Pjwvc3ZnPiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIiwic2l6ZXMiOiIxODB4MTgwIn1dLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzA1MDUwOCIsInRoZW1lX2NvbG9yIjoiIzA1MDUwOCJ9">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Logg innebandy</title>
 <style>
   @font-face {
@@ -722,6 +730,99 @@
     letter-spacing: 0.04em;
   }
   .full-hist-btn:active { background: var(--border); }
+
+
+  /* ===== PIN SCREEN ===== */
+  .pin-screen {
+    position: fixed;
+    inset: 0;
+    background: #050508;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+  }
+  .pin-screen.hidden { display: none; }
+  .pin-logo {
+    font-family: 'Maple Mono', monospace;
+    font-weight: 800;
+    font-size: 1.6rem;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .pin-sub {
+    font-family: 'Maple Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 40px;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .pin-dots {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+  .pin-dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: transparent;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .pin-dot.filled {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .pin-dot.error {
+    background: var(--red);
+    border-color: var(--red);
+  }
+  .pin-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    width: 260px;
+  }
+  .pin-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: 'Maple Mono', monospace;
+    font-weight: 800;
+    font-size: 1.6rem;
+    padding: 18px;
+    cursor: pointer;
+    transition: background 0.1s, transform 0.1s;
+    text-align: center;
+  }
+  .pin-btn:active { background: var(--border); transform: scale(0.93); }
+  .pin-btn.del { font-size: 1.1rem; color: var(--muted); }
+  .pin-btn.zero { grid-column: 2; }
+  .pin-error-msg {
+    font-family: 'Maple Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--red);
+    margin-top: 20px;
+    min-height: 20px;
+    text-align: center;
+  }
+  .pin-setup-label {
+    font-family: 'Maple Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
 
   /* ===== LÆR VIEW ===== */
   .laer-intro {
@@ -1801,6 +1902,129 @@
 </div><!-- /views -->
 
 <script>
+
+// ============================================================
+//  STORAGE ADAPTER (window.storage cloud -> localStorage fallback)
+// ============================================================
+const Store = {
+  async get(key) {
+    try {
+      if (window.storage) {
+        const r = await window.storage.get(key);
+        return r ? r.value : null;
+      }
+    } catch(e) {}
+    return localStorage.getItem(key);
+  },
+  async set(key, value) {
+    try {
+      if (window.storage) {
+        await window.storage.set(key, value);
+        return;
+      }
+    } catch(e) {}
+    localStorage.setItem(key, value);
+  },
+  async remove(key) {
+    try {
+      if (window.storage) { await window.storage.delete(key); return; }
+    } catch(e) {}
+    localStorage.removeItem(key);
+  }
+};
+
+
+// ============================================================
+//  PIN SYSTEM
+// ============================================================
+const PIN_KEY = 'hakon_pin_v1';
+const SESSION_KEY = 'hakon_session_v1';
+let pinBuffer = '';
+let pinMode = 'unlock'; // 'unlock' | 'setup' | 'confirm'
+let pinSetupFirst = '';
+
+async function initPin() {
+  const storedPin = await Store.get(PIN_KEY);
+  if (!storedPin) {
+    // First time — setup mode
+    pinMode = 'setup';
+    document.getElementById('pinSubText').textContent = 'Første gang! Sett en PIN-kode for å beskytte dataene dine.';
+    document.getElementById('pinSetupLabel').style.display = 'block';
+  } else {
+    // Check session (stay unlocked for 8 hours)
+    const session = sessionStorage.getItem(SESSION_KEY);
+    if (session && (Date.now() - parseInt(session)) < 8 * 60 * 60 * 1000) {
+      unlockApp();
+      return;
+    }
+    pinMode = 'unlock';
+  }
+  document.getElementById('pinScreen').classList.remove('hidden');
+}
+
+function pinPress(d) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += d;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(handlePin, 120);
+  }
+}
+
+function pinDel() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pinError').textContent = '';
+}
+
+function updatePinDots(state) {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.className = 'pin-dot' + (i < pinBuffer.length ? ' filled' : '') + (state === 'error' ? ' error' : '');
+  }
+}
+
+async function handlePin() {
+  if (pinMode === 'unlock') {
+    const stored = await Store.get(PIN_KEY);
+    if (pinBuffer === stored) {
+      sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+      unlockApp();
+    } else {
+      updatePinDots('error');
+      document.getElementById('pinError').textContent = 'Feil PIN, prøv igjen';
+      setTimeout(() => { pinBuffer = ''; updatePinDots(); }, 800);
+    }
+  } else if (pinMode === 'setup') {
+    pinSetupFirst = pinBuffer;
+    pinBuffer = '';
+    updatePinDots();
+    pinMode = 'confirm';
+    document.getElementById('pinSubText').textContent = 'Skriv PIN-en én gang til for å bekrefte';
+    document.getElementById('pinSetupLabel').style.display = 'none';
+  } else if (pinMode === 'confirm') {
+    if (pinBuffer === pinSetupFirst) {
+      await Store.set(PIN_KEY, pinBuffer);
+      sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+      unlockApp();
+    } else {
+      updatePinDots('error');
+      document.getElementById('pinError').textContent = 'PIN-ene stemmer ikke — prøv igjen';
+      setTimeout(() => {
+        pinBuffer = ''; pinSetupFirst = ''; pinMode = 'setup';
+        updatePinDots();
+        document.getElementById('pinSubText').textContent = 'Sett en 4-sifret PIN-kode';
+        document.getElementById('pinSetupLabel').style.display = 'block';
+      }, 800);
+    }
+  }
+}
+
+function unlockApp() {
+  document.getElementById('pinScreen').classList.add('hidden');
+  initApp();
+}
+
 // ============================================================
 //  STORAGE
 // ============================================================
